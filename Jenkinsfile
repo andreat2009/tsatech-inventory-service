@@ -55,8 +55,8 @@ spec:
     }
     environment {
         APP_NAME = "inventory-service"
-        HELM_RELEASE = "${HELM_RELEASE:-inventory-service}"
-        CHART_PATH = "${CHART_PATH:-helm}"
+        HELM_RELEASE = "${params.HELM_RELEASE ?: 'inventory-service'}"
+        CHART_PATH = "${params.CHART_PATH ?: 'helm'}"
     }
     stages {
         stage('Checkout') {
