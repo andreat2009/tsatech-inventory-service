@@ -75,6 +75,33 @@ public class InventoryService {
         eventPublisher.publish("STOCK_DELETED", "inventory", item.getId().toString(), null);
     }
 
+    @Transactional
+    public void reserveFromOrderItem(Long productId, int quantity) {
+        if (quantity <= 0) {
+            return;
+        }
+
+        InventoryItem item = inventoryRepository.findByProductId(productId)
+            .orElseGet(() -> {
+                InventoryItem created = new InventoryItem();
+                created.setProductId(productId);
+                created.setOnHand(0);
+                created.setReserved(0);
+                created.setUpdatedAt(OffsetDateTime.now());
+                return created;
+            });
+
+        int onHand = item.getOnHand() != null ? item.getOnHand() : 0;
+        int reserved = item.getReserved() != null ? item.getReserved() : 0;
+
+        item.setOnHand(Math.max(0, onHand - quantity));
+        item.setReserved(reserved + quantity);
+        item.setUpdatedAt(OffsetDateTime.now());
+
+        InventoryItem saved = inventoryRepository.save(item);
+        eventPublisher.publish("STOCK_RESERVED", "inventory", saved.getId().toString(), toResponse(saved));
+    }
+
     private InventoryResponse toResponse(InventoryItem item) {
         InventoryResponse response = new InventoryResponse();
         response.setId(item.getId());

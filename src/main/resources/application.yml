@@ -31,6 +31,11 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: ${INVENTORY_CONSUMER_GROUP:inventory-service}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   security:
     oauth2:
       resourceserver:
@@ -41,6 +46,8 @@ inventory:
   events:
     enabled: ${INVENTORY_EVENTS_ENABLED:true}
     topic: ${INVENTORY_EVENTS_TOPIC:inventory.events}
+  order-events:
+    topic: ${INVENTORY_ORDER_EVENTS_TOPIC:order.events}
 
 management:
   endpoints:
