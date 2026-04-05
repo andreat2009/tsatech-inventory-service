@@ -76,6 +76,50 @@ public class InventoryService {
     }
 
     @Transactional
+    public void commitReservationFromOrderItem(Long productId, int quantity) {
+        if (quantity <= 0) {
+            return;
+        }
+
+        InventoryItem item = inventoryRepository.findByProductId(productId)
+            .orElseThrow(() -> new NotFoundException("Inventory item not found"));
+
+        int reserved = item.getReserved() != null ? item.getReserved() : 0;
+        item.setReserved(Math.max(0, reserved - quantity));
+        item.setUpdatedAt(OffsetDateTime.now());
+
+        InventoryItem saved = inventoryRepository.save(item);
+        eventPublisher.publish("STOCK_COMMITTED", "inventory", saved.getId().toString(), toResponse(saved));
+    }
+
+    @Transactional
+    public void releaseReservationFromOrderItem(Long productId, int quantity) {
+        if (quantity <= 0) {
+            return;
+        }
+
+        InventoryItem item = inventoryRepository.findByProductId(productId)
+            .orElseGet(() -> {
+                InventoryItem created = new InventoryItem();
+                created.setProductId(productId);
+                created.setOnHand(0);
+                created.setReserved(0);
+                created.setUpdatedAt(OffsetDateTime.now());
+                return created;
+            });
+
+        int onHand = item.getOnHand() != null ? item.getOnHand() : 0;
+        int reserved = item.getReserved() != null ? item.getReserved() : 0;
+
+        item.setOnHand(onHand + quantity);
+        item.setReserved(Math.max(0, reserved - quantity));
+        item.setUpdatedAt(OffsetDateTime.now());
+
+        InventoryItem saved = inventoryRepository.save(item);
+        eventPublisher.publish("STOCK_RELEASED", "inventory", saved.getId().toString(), toResponse(saved));
+    }
+
+    @Transactional
     public void reserveFromOrderItem(Long productId, int quantity) {
         if (quantity <= 0) {
             return;

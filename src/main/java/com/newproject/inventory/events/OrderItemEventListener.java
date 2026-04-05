@@ -25,7 +25,9 @@ public class OrderItemEventListener {
         try {
             JsonNode root = objectMapper.readTree(payload);
             String eventType = root.path("eventType").asText("");
-            if (!"ORDER_ITEM_ADDED".equals(eventType)) {
+            if (!"ORDER_ITEM_ADDED".equals(eventType)
+                && !"ORDER_ITEM_COMMITTED".equals(eventType)
+                && !"ORDER_ITEM_RELEASED".equals(eventType)) {
                 return;
             }
 
@@ -38,7 +40,14 @@ public class OrderItemEventListener {
                 return;
             }
 
-            inventoryService.reserveFromOrderItem(productId, quantity);
+            switch (eventType) {
+                case "ORDER_ITEM_ADDED" -> inventoryService.reserveFromOrderItem(productId, quantity);
+                case "ORDER_ITEM_COMMITTED" -> inventoryService.commitReservationFromOrderItem(productId, quantity);
+                case "ORDER_ITEM_RELEASED" -> inventoryService.releaseReservationFromOrderItem(productId, quantity);
+                default -> {
+                    return;
+                }
+            }
         } catch (Exception ex) {
             logger.warn("Unable to process order item event: {}", ex.getMessage());
         }
