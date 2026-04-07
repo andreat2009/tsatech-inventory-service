@@ -33,6 +33,7 @@ public class OrderItemEventListener {
 
             JsonNode itemPayload = root.path("payload");
             Long productId = asLong(itemPayload.path("productId"));
+            String variantKey = asText(itemPayload.path("variantKey"));
             Integer quantity = asInt(itemPayload.path("quantity"));
 
             if (productId == null || quantity == null || quantity <= 0) {
@@ -41,9 +42,9 @@ public class OrderItemEventListener {
             }
 
             switch (eventType) {
-                case "ORDER_ITEM_ADDED" -> inventoryService.reserveFromOrderItem(productId, quantity);
-                case "ORDER_ITEM_COMMITTED" -> inventoryService.commitReservationFromOrderItem(productId, quantity);
-                case "ORDER_ITEM_RELEASED" -> inventoryService.releaseReservationFromOrderItem(productId, quantity);
+                case "ORDER_ITEM_ADDED" -> inventoryService.reserveFromOrderItem(productId, variantKey, quantity);
+                case "ORDER_ITEM_COMMITTED" -> inventoryService.commitReservationFromOrderItem(productId, variantKey, quantity);
+                case "ORDER_ITEM_RELEASED" -> inventoryService.releaseReservationFromOrderItem(productId, variantKey, quantity);
                 default -> {
                     return;
                 }
@@ -85,5 +86,13 @@ public class OrderItemEventListener {
             }
         }
         return null;
+    }
+
+    private String asText(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return "";
+        }
+        String value = node.asText("").trim();
+        return value.isEmpty() ? "" : value;
     }
 }

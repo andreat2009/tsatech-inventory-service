@@ -27,6 +27,11 @@ public class InventoryController {
         return inventoryService.get(productId);
     }
 
+    @GetMapping("/{productId}/variants/{variantKey}")
+    public InventoryResponse getVariant(@PathVariable Long productId, @PathVariable String variantKey) {
+        return inventoryService.getVariant(productId, variantKey);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public InventoryResponse create(@Valid @RequestBody InventoryRequest request) {
@@ -38,9 +43,20 @@ public class InventoryController {
         return inventoryService.update(productId, request);
     }
 
+    @PutMapping("/{productId}/variants/{variantKey}")
+    public InventoryResponse updateVariant(@PathVariable Long productId, @PathVariable String variantKey, @Valid @RequestBody InventoryRequest request) {
+        return inventoryService.updateVariant(productId, variantKey, request);
+    }
+
     @DeleteMapping("/{productId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long productId) {
         inventoryService.delete(productId);
+    }
+
+    @DeleteMapping("/{productId}/variants/{variantKey}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteVariant(@PathVariable Long productId, @PathVariable String variantKey) {
+        inventoryService.deleteVariant(productId, variantKey);
     }
 }

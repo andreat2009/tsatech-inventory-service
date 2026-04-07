@@ -34,10 +34,10 @@ class InventoryServiceReservationLifecycleTest {
 
     @Test
     void releaseReservationReturnsStockToOnHand() {
-        InventoryItem item = inventoryItem(1008L, 0, 3);
-        when(inventoryRepository.findByProductId(1008L)).thenReturn(Optional.of(item));
+        InventoryItem item = inventoryItem(1008L, "", 0, 3);
+        when(inventoryRepository.findByProductIdAndVariantKey(1008L, "")).thenReturn(Optional.of(item));
 
-        inventoryService.releaseReservationFromOrderItem(1008L, 2);
+        inventoryService.releaseReservationFromOrderItem(1008L, "", 2);
 
         assertThat(item.getOnHand()).isEqualTo(2);
         assertThat(item.getReserved()).isEqualTo(1);
@@ -46,20 +46,35 @@ class InventoryServiceReservationLifecycleTest {
 
     @Test
     void commitReservationKeepsSoldStockReducedButClearsReserve() {
-        InventoryItem item = inventoryItem(1008L, 5, 3);
-        when(inventoryRepository.findByProductId(1008L)).thenReturn(Optional.of(item));
+        InventoryItem item = inventoryItem(1008L, "", 5, 3);
+        when(inventoryRepository.findByProductIdAndVariantKey(1008L, "")).thenReturn(Optional.of(item));
 
-        inventoryService.commitReservationFromOrderItem(1008L, 2);
+        inventoryService.commitReservationFromOrderItem(1008L, "", 2);
 
         assertThat(item.getOnHand()).isEqualTo(5);
         assertThat(item.getReserved()).isEqualTo(1);
         verify(eventPublisher).publish(org.mockito.ArgumentMatchers.eq("STOCK_COMMITTED"), org.mockito.ArgumentMatchers.eq("inventory"), any(), any());
     }
 
-    private InventoryItem inventoryItem(Long productId, int onHand, int reserved) {
+    @Test
+    void reserveAndReleaseWorkPerVariantScope() {
+        InventoryItem item = inventoryItem(1008L, "RED-M", 4, 0);
+        when(inventoryRepository.findByProductIdAndVariantKey(1008L, "RED-M")).thenReturn(Optional.of(item));
+
+        inventoryService.reserveFromOrderItem(1008L, "RED-M", 2);
+        assertThat(item.getOnHand()).isEqualTo(2);
+        assertThat(item.getReserved()).isEqualTo(2);
+
+        inventoryService.releaseReservationFromOrderItem(1008L, "RED-M", 1);
+        assertThat(item.getOnHand()).isEqualTo(3);
+        assertThat(item.getReserved()).isEqualTo(1);
+    }
+
+    private InventoryItem inventoryItem(Long productId, String variantKey, int onHand, int reserved) {
         InventoryItem item = new InventoryItem();
         item.setId(1L);
         item.setProductId(productId);
+        item.setVariantKey(variantKey);
         item.setOnHand(onHand);
         item.setReserved(reserved);
         return item;
