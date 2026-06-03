@@ -25,8 +25,10 @@ public class OrderItemEventListener {
         try {
             JsonNode root = objectMapper.readTree(payload);
             String eventType = root.path("eventType").asText("");
-            if (!"ORDER_ITEM_ADDED".equals(eventType)
-                && !"ORDER_ITEM_COMMITTED".equals(eventType)
+            // La RISERVA è ora sincrona in fase di checkout (POST /api/inventory/reserve),
+            // non più guidata da ORDER_ITEM_ADDED: qui restano solo commit e release del
+            // ciclo di vita ordine (PAID → committed, FAILED/CANCELLED → released).
+            if (!"ORDER_ITEM_COMMITTED".equals(eventType)
                 && !"ORDER_ITEM_RELEASED".equals(eventType)) {
                 return;
             }
@@ -42,7 +44,6 @@ public class OrderItemEventListener {
             }
 
             switch (eventType) {
-                case "ORDER_ITEM_ADDED" -> inventoryService.reserveFromOrderItem(productId, variantKey, quantity);
                 case "ORDER_ITEM_COMMITTED" -> inventoryService.commitReservationFromOrderItem(productId, variantKey, quantity);
                 case "ORDER_ITEM_RELEASED" -> inventoryService.releaseReservationFromOrderItem(productId, variantKey, quantity);
                 default -> {

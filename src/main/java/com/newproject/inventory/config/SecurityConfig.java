@@ -26,6 +26,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/inventory/**").permitAll()
+                // riserva/rilascio sincroni del checkout (anche guest, come orders/payments)
+                .requestMatchers(HttpMethod.POST, "/api/inventory/reserve", "/api/inventory/release").permitAll()
                 .requestMatchers("/api/inventory/**").authenticated()
                 .anyRequest().authenticated()
             )

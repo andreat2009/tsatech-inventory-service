@@ -2,6 +2,7 @@ package com.newproject.inventory.controller;
 
 import com.newproject.inventory.dto.InventoryRequest;
 import com.newproject.inventory.dto.InventoryResponse;
+import com.newproject.inventory.dto.StockReservationRequest;
 import com.newproject.inventory.service.InventoryService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -36,6 +37,18 @@ public class InventoryController {
     @ResponseStatus(HttpStatus.CREATED)
     public InventoryResponse create(@Valid @RequestBody InventoryRequest request) {
         return inventoryService.create(request);
+    }
+
+    @PostMapping("/reserve")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reserve(@RequestBody StockReservationRequest request) {
+        inventoryService.reserve(request.getLines());
+    }
+
+    @PostMapping("/release")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void release(@RequestBody StockReservationRequest request) {
+        inventoryService.release(request.getLines());
     }
 
     @PutMapping("/{productId}")

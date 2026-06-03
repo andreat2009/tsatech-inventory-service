@@ -60,6 +60,9 @@ public class GlobalApiExceptionHandler {
         if (exception instanceof NoResourceFoundException || "NotFoundException".equals(simpleName)) {
             return HttpStatus.NOT_FOUND;
         }
+        if ("InsufficientStockException".equals(simpleName)) {
+            return HttpStatus.CONFLICT;
+        }
         if ("AccessDeniedException".equals(simpleName)) {
             return HttpStatus.FORBIDDEN;
         }

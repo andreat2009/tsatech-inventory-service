@@ -3,11 +3,14 @@ package com.newproject.inventory.service;
 import com.newproject.inventory.domain.InventoryItem;
 import com.newproject.inventory.dto.InventoryRequest;
 import com.newproject.inventory.dto.InventoryResponse;
+import com.newproject.inventory.dto.StockLineRequest;
 import com.newproject.inventory.events.EventPublisher;
 import com.newproject.inventory.exception.BadRequestException;
+import com.newproject.inventory.exception.InsufficientStockException;
 import com.newproject.inventory.exception.NotFoundException;
 import com.newproject.inventory.repository.InventoryRepository;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -99,19 +102,88 @@ public class InventoryService {
         eventPublisher.publish("STOCK_RELEASED", "inventory", saved.getId().toString(), toResponse(saved));
     }
 
+    /**
+     * Riserva sincrona dell'intero carrello (all-or-nothing). Per ogni riga TRACCIATA
+     * (esiste una riga inventario) usa una UPDATE atomica con guardia di capienza: se anche
+     * una sola riga non ha stock sufficiente l'intera transazione viene annullata e si
+     * solleva {@link InsufficientStockException} (HTTP 409). Le righe NON tracciate (prodotti
+     * senza inventario gestito) sono lasciate passare senza decremento.
+     */
     @Transactional
-    public void reserveFromOrderItem(Long productId, String variantKey, int quantity) {
-        if (quantity <= 0) {
+    public void reserve(List<StockLineRequest> lines) {
+        if (lines == null || lines.isEmpty()) {
             return;
         }
-        InventoryItem item = findOrCreate(productId, variantKey);
-        int onHand = item.getOnHand() != null ? item.getOnHand() : 0;
-        int reserved = item.getReserved() != null ? item.getReserved() : 0;
-        item.setOnHand(Math.max(0, onHand - quantity));
-        item.setReserved(reserved + quantity);
-        item.setUpdatedAt(OffsetDateTime.now());
-        InventoryItem saved = inventoryRepository.save(item);
-        eventPublisher.publish("STOCK_RESERVED", "inventory", saved.getId().toString(), toResponse(saved));
+        OffsetDateTime now = OffsetDateTime.now();
+        List<StockLineRequest> reservedLines = new ArrayList<>();
+        List<String> insufficient = new ArrayList<>();
+
+        for (StockLineRequest line : lines) {
+            if (line == null || line.getProductId() == null) {
+                continue;
+            }
+            int quantity = line.getQuantity() != null ? line.getQuantity() : 0;
+            if (quantity <= 0) {
+                continue;
+            }
+            String variantKey = normalizeVariantKey(line.getVariantKey());
+            int updated = inventoryRepository.reserveIfAvailable(line.getProductId(), variantKey, quantity, now);
+            if (updated > 0) {
+                reservedLines.add(new StockLineRequest(line.getProductId(), variantKey, quantity));
+            } else if (inventoryRepository.findByProductIdAndVariantKey(line.getProductId(), variantKey).isPresent()) {
+                // riga tracciata ma capienza insufficiente
+                insufficient.add(describeLine(line.getProductId(), variantKey));
+            }
+            // altrimenti: prodotto non tracciato → consentito senza riservare
+        }
+
+        if (!insufficient.isEmpty()) {
+            // rollback dell'intera transazione (anche delle righe già riservate sopra)
+            throw new InsufficientStockException("Insufficient stock for: " + String.join(", ", insufficient));
+        }
+
+        for (StockLineRequest reserved : reservedLines) {
+            inventoryRepository.findByProductIdAndVariantKey(reserved.getProductId(), reserved.getVariantKey())
+                .ifPresent(item -> eventPublisher.publish("STOCK_RESERVED", "inventory", item.getId().toString(), toResponse(item)));
+        }
+    }
+
+    /**
+     * Rilascio di compensazione di una riserva sincrona (es. checkout abortito prima della
+     * creazione dell'ordine). Restituisce le quantità a onHand. Salta le righe non tracciate
+     * e non crea mai righe inventario fantasma.
+     */
+    @Transactional
+    public void release(List<StockLineRequest> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return;
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        for (StockLineRequest line : lines) {
+            if (line == null || line.getProductId() == null) {
+                continue;
+            }
+            int quantity = line.getQuantity() != null ? line.getQuantity() : 0;
+            if (quantity <= 0) {
+                continue;
+            }
+            String variantKey = normalizeVariantKey(line.getVariantKey());
+            inventoryRepository.findByProductIdAndVariantKey(line.getProductId(), variantKey).ifPresent(item -> {
+                int onHand = item.getOnHand() != null ? item.getOnHand() : 0;
+                int reserved = item.getReserved() != null ? item.getReserved() : 0;
+                item.setOnHand(onHand + quantity);
+                item.setReserved(Math.max(0, reserved - quantity));
+                item.setUpdatedAt(now);
+                InventoryItem saved = inventoryRepository.save(item);
+                eventPublisher.publish("STOCK_RELEASED", "inventory", saved.getId().toString(), toResponse(saved));
+            });
+        }
+    }
+
+    private String describeLine(Long productId, String variantKey) {
+        return variantKey == null || variantKey.isEmpty()
+            ? "product " + productId
+            : "product " + productId + " [" + variantKey + "]";
     }
 
     private InventoryResponse updateScoped(Long productId, String variantKey, InventoryRequest request) {
