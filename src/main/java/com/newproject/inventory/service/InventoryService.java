@@ -171,8 +171,17 @@ public class InventoryService {
             inventoryRepository.findByProductIdAndVariantKey(line.getProductId(), variantKey).ifPresent(item -> {
                 int onHand = item.getOnHand() != null ? item.getOnHand() : 0;
                 int reserved = item.getReserved() != null ? item.getReserved() : 0;
-                item.setOnHand(onHand + quantity);
-                item.setReserved(Math.max(0, reserved - quantity));
+                // SECURITY (H6): si puo' rilasciare SOLO cio' che e' effettivamente riservato.
+                // L'endpoint /release e' pubblico (serve al checkout guest per compensare una
+                // riserva abortita). Senza questo cap un anonimo poteva chiamare /release senza
+                // alcuna reservation e gonfiare onHand all'infinito (phantom stock -> oversell).
+                // Con reserved==0 il rilascio e' un no-op.
+                int releasable = Math.min(quantity, reserved);
+                if (releasable <= 0) {
+                    return;
+                }
+                item.setOnHand(onHand + releasable);
+                item.setReserved(reserved - releasable);
                 item.setUpdatedAt(now);
                 InventoryItem saved = inventoryRepository.save(item);
                 eventPublisher.publish("STOCK_RELEASED", "inventory", saved.getId().toString(), toResponse(saved));
